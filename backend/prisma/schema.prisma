@@ -1,0 +1,304 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  OWNER
+  ADMIN
+}
+
+enum PropertyType {
+  HOSTEL
+  PG
+  ROOM
+  FLAT
+}
+
+enum RoomType {
+  SINGLE
+  DOUBLE
+  TRIPLE
+  DORMITORY
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PhotoCategory {
+  ROOM
+  BATHROOM
+  BUILDING
+  COMMON_AREA
+  ENTRANCE
+  FURNITURE
+  SURROUNDINGS
+  MAINTENANCE
+  OTHER
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ReportType {
+  FAKE_PROPERTY
+  INCORRECT_INFO
+  MISLEADING_INFO
+  INAPPROPRIATE_PHOTO
+  SPAM
+  PRIVACY_ISSUE
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+  role         Role     @default(STUDENT)
+  createdAt    DateTime @default(now())
+
+  bookings         Booking[]
+  reviews          Review[]
+  photos           Photo[]
+  favorites        Favorite[]
+  reports          Report[]
+  chatMessages     ChatMessage[]
+  ownedProperties  Property[]
+  claimedMapPlaces MapPlace[]
+}
+
+model College {
+  id        String @id @default(cuid())
+  name      String
+  city      String
+  latitude  Float
+  longitude Float
+}
+
+model Building {
+  id         String     @id @default(cuid())
+  name       String
+  address    String
+  city       String
+  area       String
+  pincode    String?
+  latitude   Float
+  longitude  Float
+  properties Property[]
+}
+
+model Amenity {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  properties Property[]
+}
+
+model Property {
+  id                  String                    @id @default(cuid())
+  name                String
+  type                PropertyType
+  description         String
+  buildingId          String?
+  ownerId             String?
+  address             String
+  city                String
+  area                String
+  pincode             String?
+  latitude            Float
+  longitude           Float
+  rent                Int
+  deposit             Int
+  foodIncluded        Boolean                   @default(false)
+  wifi                Boolean                   @default(false)
+  ac                  Boolean                   @default(false)
+  cooler              Boolean                   @default(false)
+  attachedBathroom    Boolean                   @default(false)
+  laundry             Boolean                   @default(false)
+  parking             Boolean                   @default(false)
+  cctv                Boolean                   @default(false)
+  furnished           Boolean                   @default(false)
+  electricityIncluded Boolean                   @default(false)
+  waterInfo           String?
+  rules               String?
+  securityInfo        String?
+  nearbyPlaces        String?
+  isActive            Boolean                   @default(true)
+  isDemo              Boolean                   @default(false)
+  verificationStatus  ListingVerificationStatus @default(UNVERIFIED)
+  verifiedAt          DateTime?
+  createdAt           DateTime                  @default(now())
+
+  building  Building?  @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  owner     User?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  rooms     Room[]
+  amenities Amenity[]
+  reviews   Review[]
+  photos    Photo[]
+  bookings  Booking[]
+  favorites Favorite[]
+  reports   Report[]
+
+  @@index([area])
+  @@index([city])
+  @@index([rent])
+}
+
+model Room {
+  id            String   @id @default(cuid())
+  propertyId    String
+  type          RoomType
+  rent          Int
+  totalBeds     Int
+  availableBeds Int
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id         String           @id @default(cuid())
+  propertyId String
+  userId     String
+  rating     Int
+  text       String
+  verified   Boolean          @default(false)
+  status     ModerationStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports  Report[]
+
+  @@unique([propertyId, userId])
+}
+
+model Photo {
+  id            String           @id @default(cuid())
+  propertyId    String
+  uploaderId    String
+  url           String
+  cloudinaryId  String
+  category      PhotoCategory
+  isOfficial    Boolean          @default(false)
+  status        ModerationStatus @default(PENDING)
+  aiObservation String?
+  createdAt     DateTime         @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  uploader User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  reports  Report[]
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  propertyId   String
+  userId       String
+  roomType     RoomType
+  moveInDate   DateTime
+  occupants    Int
+  contactName  String
+  contactPhone String
+  note         String?
+  status       BookingStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, propertyId])
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  reporterId String
+  type       ReportType
+  details    String
+  status     ReportStatus @default(OPEN)
+  propertyId String?
+  photoId    String?
+  reviewId   String?
+  createdAt  DateTime     @default(now())
+
+  reporter User      @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  photo    Photo?    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  review   Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum ListingVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum MapPlaceCategory {
+  HOSTEL
+  PG
+  ROOM
+  APARTMENT
+  COLLEGE
+  LANDMARK
+  OTHER
+}
+
+model MapPlace {
+  id           String           @id @default(cuid())
+  externalId   String           @unique
+  source       String           @default("OPENSTREETMAP")
+  name         String
+  category     MapPlaceCategory @default(OTHER)
+  address      String?
+  city         String?
+  area         String?
+  latitude     Float
+  longitude    Float?
+  website      String?
+  phone        String?
+  lastSyncedAt DateTime         @default(now())
+  claimedById  String?
+  claimedAt    DateTime?
+  user         User?            @relation(fields: [userId], references: [id])
+  userId       String?
+
+  @@index([city, area])
+  @@index([latitude, longitude])
+  @@index([category])
+}
