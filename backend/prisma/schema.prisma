@@ -66,6 +66,7 @@ enum ReportStatus {
   OPEN
   IN_REVIEW
   RESOLVED
+  REOPENED
   REJECTED
 }
 
@@ -245,6 +246,8 @@ model Report {
   propertyId String?
   photoId    String?
   reviewId   String?
+  resolutionNote       String?
+  resolvedAt           DateTime?
   createdAt  DateTime     @default(now())
 
   reporter User      @relation(fields: [reporterId], references: [id], onDelete: Cascade)

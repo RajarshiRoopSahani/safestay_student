@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -61,9 +62,18 @@ export default function Navbar() {
           className="group flex shrink-0 items-center gap-2.5"
           onClick={() => setMobileOpen(false)}
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-700 text-white shadow-md shadow-teal-900/15 transition group-hover:bg-teal-800">
-            <ShieldCheck className="h-6 w-6" />
-          </span>
+          
+<span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden">
+  <Image
+    src="/logo.png"
+    alt="SafeStay Logo"
+    width={48}
+    height={48}
+    priority
+    className="h-full w-full object-contain"
+  />
+</span>
+
           <span className="flex flex-col">
             <span className="text-lg font-extrabold leading-5 tracking-tight text-slate-950">
               SafeStay

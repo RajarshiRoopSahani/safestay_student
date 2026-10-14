@@ -25,6 +25,7 @@ async function assertActiveProperty(id: string) {
 }
 
 export async function uploadPhoto(req: Request, res: Response) {
+  console.log("PHOTO UPLOAD API HIT");
   const propertyId = String(req.params.id);
   const { category, official } = uploadSchema.parse(req.body);
   await assertActiveProperty(propertyId);
@@ -56,7 +57,7 @@ export async function uploadPhoto(req: Request, res: Response) {
       cloudinaryId: publicId,
       category,
       isOfficial: isAdminOfficial,
-      status: isAdminOfficial ? "APPROVED" : "PENDING",
+      status: "APPROVED",
     },
     select: { ...publicPhotoSelect, status: true },
   });
