@@ -75,11 +75,11 @@ function ProfileContent() {
           <div>
             <dt className="text-sm text-slate-500">Account type</dt>
             <dd className="font-medium text-slate-900">
-              {user.role === "OWNER"
-                ? "Property Owner"
-                : user.role === "ADMIN"
-                  ? "Admin"
-                  : "Student"}
+             {String(user.role).toUpperCase() === "OWNER"
+  ? "Property Owner"
+  : String(user.role).toUpperCase() === "ADMIN"
+    ? "Admin"
+    : "Student"}
             </dd>
           </div>
 
@@ -128,7 +128,7 @@ function ProfileContent() {
           )}
 
           {/* Owner Dashboard */}
-          {user.role === "OWNER" && (
+          {String(user.role).toUpperCase() === "OWNER" && (
             <Link
               href="/owner"
               className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"

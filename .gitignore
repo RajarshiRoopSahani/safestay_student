@@ -7,3 +7,22 @@ dist
 !.env.example
 *.log
 .DS_Store
+.env
+.env.*
+!.env.example
+!.env - Copy.example
+!.env - Copy (2).example
+node_modules/
+dist/
+.next/
+*- Copy/
+*- Copy (2)/
+*- Copy - Copy/
+*- Copy.gitignore
+*- Copy (2).gitignore
+*- Copy - Copy.gitignore
+README - Copy*.md
+schema-output - Copy*.txt
+.git - Copy/
+.git - Copy (2)/
+.git - Copy - Copy/

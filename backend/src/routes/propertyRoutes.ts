@@ -3,6 +3,7 @@ import rateLimit from "express-rate-limit";
 import {
   createProperty,
   deleteProperty,
+  getMyProperties,
   getProperty,
   updateProperty,
 } from "../controllers/propertyController";
@@ -35,28 +36,21 @@ const uploadLimiter = rateLimit({
 
 router.get("/", asyncHandler(searchProperties));
 
+// IMPORTANT: /mine must be before /:id
 router.get(
-  "/:id",
-  optionalAuth,
-  asyncHandler(getProperty)
-);
-
-router.get(
-  "/:id/reviews",
-  optionalAuth,
-  asyncHandler(listReviews)
-);
-
-router.post(
-  "/:id/reviews",
+  "/mine",
   authenticate,
-  asyncHandler(createReview)
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(getMyProperties)
 );
 
-router.get(
-  "/:id/photos",
-  asyncHandler(listPhotos)
-);
+router.get("/:id", optionalAuth, asyncHandler(getProperty));
+
+router.get("/:id/reviews", optionalAuth, asyncHandler(listReviews));
+
+router.post("/:id/reviews", authenticate, asyncHandler(createReview));
+
+router.get("/:id/photos", asyncHandler(listPhotos));
 
 router.post(
   "/:id/photos",
@@ -66,11 +60,6 @@ router.post(
   asyncHandler(uploadPhoto)
 );
 
-/*
- * Property management
- * OWNER can manage their own properties.
- * ADMIN can manage all properties.
- */
 router.post(
   "/",
   authenticate,
