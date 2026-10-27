@@ -3,7 +3,7 @@ import { env } from "../config/env";
 import { AppError } from "../middleware/errorHandler";
 
 export const aiConfigured =
-  env.aiApiKey !== "" &&
+  Boolean(env.aiApiKey) &&
   !/^(your|replace)-/i.test(env.aiApiKey);
 
 export type ContentBlock =
@@ -34,6 +34,18 @@ type AiResponse = {
   stop_reason: string;
 };
 
+type OllamaMessage = {
+  role: string;
+  content: string;
+  tool_name?: string;
+  tool_calls?: Array<{
+    function: {
+      name: string;
+      arguments: unknown;
+    };
+  }>;
+};
+
 export async function callClaude(opts: {
   system: string;
   messages: AiMessage[];
@@ -43,6 +55,10 @@ export async function callClaude(opts: {
   if (!aiConfigured) {
     throw new AppError(503, "SafeStay AI is not configured yet");
   }
+
+  const messages: OllamaMessage[] = [
+    { role: "system", content: opts.system },
+  ];
 
   const toolNames = new Map<string, string>();
 
@@ -56,161 +72,140 @@ export async function callClaude(opts: {
     }
   }
 
-  const contents = opts.messages.map((message) => {
+  for (const message of opts.messages) {
     const blocks = Array.isArray(message.content)
       ? message.content
       : [{ type: "text" as const, text: message.content }];
 
-    const parts: Record<string, unknown>[] = [];
+    const textParts: string[] = [];
+    const toolCalls: NonNullable<OllamaMessage["tool_calls"]> = [];
 
     for (const block of blocks) {
       if (block.type === "text") {
-        parts.push({ text: block.text });
+        textParts.push(block.text);
+      } else if (block.type === "image") {
+        textParts.push(`[Image URL: ${block.source.url}]`);
       } else if (block.type === "tool_use") {
-        parts.push({
-          functionCall: {
+        toolCalls.push({
+          function: {
             name: block.name,
-            args: block.input ?? {},
+            arguments: block.input ?? {},
           },
-          ...(block.thoughtSignature
-            ? { thoughtSignature: block.thoughtSignature }
-            : {}),
         });
       } else if (block.type === "tool_result") {
         const name = toolNames.get(block.tool_use_id);
 
-        if (name) {
-          let result: unknown;
-
-          try {
-            result = JSON.parse(block.content);
-          } catch {
-            result = { result: block.content };
-          }
-
-          parts.push({
-            functionResponse: {
-              name,
-              response:
-                result &&
-                typeof result === "object" &&
-                !Array.isArray(result)
-                  ? result
-                  : { result },
-            },
-          });
-        } else {
-          parts.push({ text: block.content });
+        if (!name) {
+          throw new AppError(
+            400,
+            "Could not match AI tool result to its tool call"
+          );
         }
-      } else if (block.type === "image") {
-        parts.push({ text: `[Image URL: ${block.source.url}]` });
+
+        messages.push({
+          role: "tool",
+          tool_name: name,
+          content: block.content,
+        });
       }
     }
 
-    return {
-      role: message.role === "assistant" ? "model" : "user",
-      parts,
-    };
-  });
+    if (textParts.length || toolCalls.length) {
+      const item: OllamaMessage = {
+        role: message.role,
+        content: textParts.join("\n"),
+      };
 
-  const tools = opts.tools?.length
-    ? [
-        {
-          functionDeclarations: opts.tools.map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.input_schema,
-          })),
-        },
-      ]
-    : undefined;
+      if (toolCalls.length) {
+        item.tool_calls = toolCalls;
+      }
+
+      messages.push(item);
+    }
+  }
+
+  const tools = opts.tools?.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+    },
+  }));
 
   let response: Response;
 
   try {
-    const model = env.aiModel || "gemini-3.8-flash";
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${encodeURIComponent(model)}:generateContent`;
-
-    response = await fetch(url, {
+    response = await fetch("https://ollama.com/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": env.aiApiKey,
+        Authorization: `Bearer ${env.aiApiKey}`,
       },
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: opts.system }],
+        model: env.aiModel,
+        messages,
+        stream: false,
+        ...(tools?.length ? { tools } : {}),
+        options: {
+          num_predict: opts.maxTokens ?? 800,
         },
-        contents,
-        generationConfig: {
-          maxOutputTokens: opts.maxTokens ?? 800,
-        },
-        ...(tools ? { tools } : {}),
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(120000),
     });
   } catch (error) {
-    console.error("Gemini request failed:", error);
-    console.error("AI model:", env.aiModel);
-    throw new AppError(502, "SafeStay AI is temporarily unavailable");
+    console.error("Ollama Cloud request failed:", error);
+    throw new AppError(
+      502,
+      "SafeStay AI is temporarily unavailable"
+    );
   }
 
   if (!response.ok) {
-    console.error(
-      "Gemini API error:",
-      response.status,
-      await response.text()
+    const details = await response.text();
+    console.error("Ollama Cloud API error:", response.status, details);
+
+    throw new AppError(
+      502,
+      "SafeStay AI is temporarily unavailable"
     );
-    throw new AppError(502, "SafeStay AI is temporarily unavailable");
   }
 
   const data = (await response.json()) as {
-    candidates?: Array<{
-      finishReason?: string;
-      content?: {
-        parts?: Array<{
-          text?: string;
-          thoughtSignature?: string;
-          functionCall?: {
-            name: string;
-            args?: unknown;
-          };
-        }>;
-      };
-    }>;
+    message?: {
+      content?: string;
+      tool_calls?: Array<{
+        function: {
+          name: string;
+          arguments: unknown;
+        };
+      }>;
+    };
   };
 
-  const candidate = data.candidates?.[0];
-
-  if (!candidate) {
-    throw new AppError(502, "Gemini returned an empty response");
+  if (!data.message) {
+    throw new AppError(502, "Ollama returned an empty response");
   }
 
-  const content: ContentBlock[] = (
-    candidate.content?.parts ?? []
-  ).flatMap((part, index): ContentBlock[] => {
-    const blocks: ContentBlock[] = [];
+  const content: ContentBlock[] = [];
 
-    if (part.text) {
-      blocks.push({ type: "text", text: part.text });
-    }
+  if (data.message.content) {
+    content.push({
+      type: "text",
+      text: data.message.content,
+    });
+  }
 
-    if (part.functionCall) {
-      blocks.push({
-        type: "tool_use",
-        id: `gemini_${Date.now()}_${index}`,
-        name: part.functionCall.name,
-        input: part.functionCall.args ?? {},
-        ...(part.thoughtSignature
-          ? { thoughtSignature: part.thoughtSignature }
-          : {}),
-      });
-    }
-
-    return blocks;
-  });
+  for (const [index, call] of (
+    data.message.tool_calls ?? []
+  ).entries()) {
+    content.push({
+      type: "tool_use",
+      id: `ollama_${Date.now()}_${index}`,
+      name: call.function.name,
+      input: call.function.arguments ?? {},
+    });
+  }
 
   const hasToolCalls = content.some(
     (block) => block.type === "tool_use"

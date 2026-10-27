@@ -13,8 +13,8 @@ export const env = {
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
   frontendUrl: required("FRONTEND_URL"),
-  aiApiKey: process.env.AI_API_KEY || "",
-  aiModel: process.env.AI_MODEL || "gemini-3.8-flash",
+   aiApiKey: process.env.AI_API_KEY || "",
+  aiModel: process.env.AI_MODEL || "gemma4:31b",
 
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
