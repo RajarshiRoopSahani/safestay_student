@@ -1,4 +1,4 @@
-# SafeStay Student
+# SafeStay Student AI
 
 **Find Better. Stay Safer.**
 
